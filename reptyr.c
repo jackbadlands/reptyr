@@ -156,6 +156,9 @@ void usage(char *me) {
     fprintf(stderr, "Usage: %s [-s] PID\n", me);
     fprintf(stderr, "       %s -l\n", me);
     fprintf(stderr, "  -l    Create a new pty pair and print the name of the slave.\n");
+    fprintf(stderr, "           if there are command-line arguments after -l\n");
+    fprintf(stderr, "           they are executed with REPTYR_PTY set to path of pty.\n");
+    fprintf(stderr, "  -L    Like '-l', but also dup2-s 0-2 of the script\n");
     fprintf(stderr, "  -s    Attach fds 0-2 on the target, even if it is not attached to a tty.\n");
     fprintf(stderr, "  -h    Print this help message and exit.\n");
     fprintf(stderr, "  -v    Print the version number and exit.\n");
@@ -188,6 +191,7 @@ int main(int argc, char **argv) {
     int arg = 1;
     int do_attach = 1;
     int force_stdio = 0;
+    int unattached_script_redirection = 0;
 
     if (argc < 2) {
         usage(argv[0]);
@@ -200,6 +204,10 @@ int main(int argc, char **argv) {
             return 0;
         case 'l':
             do_attach = 0;
+            break;
+        case 'L':
+            do_attach = 0;
+            unattached_script_redirection = 1;
             break;
         case 's':
             arg++;
@@ -219,6 +227,8 @@ int main(int argc, char **argv) {
             return 1;
         }
     }
+
+    if(getenv("REPTYR_REDIRECT")) { unattached_script_redirection = 1; }
 
     if (do_attach && arg >= argc) {
         fprintf(stderr, "%s: No pid specified to attach\n", argv[0]);
@@ -249,7 +259,7 @@ int main(int argc, char **argv) {
         if (argc > 2) {
             if(!fork()) {
                 setenv("REPTYR_PTY", ptsname(pty), 1);
-                if (getenv("REPTYR_REDIRECT")) {
+                if (unattached_script_redirection) {
                     int f;
                     f = open(ptsname(pty), O_RDONLY, 0); dup2(f, 0);            close(f);
                     f = open(ptsname(pty), O_WRONLY, 0); dup2(f, 1); dup2(f,2); close(f);
